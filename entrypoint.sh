@@ -2,13 +2,13 @@
 set -euo pipefail
 
 # auth
-gcloud config set project "$PROJECT_ID"
-[[ "$GCLOUD_SERVICE_KEY" != "" ]] && ( echo "$GCLOUD_SERVICE_KEY" | base64 -d > /gcloud-service-key.json )
-gcloud auth activate-service-account --key-file /gcloud-service-key.json
-echo "successfully authenticated"
+# gcloud config set project "$PROJECT_ID"
+# [[ "$GCLOUD_SERVICE_KEY" != "" ]] && ( echo "$GCLOUD_SERVICE_KEY" | base64 -d > /gcloud-service-key.json )
+# gcloud auth activate-service-account --key-file /gcloud-service-key.json
+# echo "successfully authenticated"
 
 # fetch the GKE's kubeconfig
-gcloud container clusters get-credentials "$CLUSTER_NAME" --zone "$ZONE" --project "$PROJECT_ID"
+# gcloud container clusters get-credentials "$CLUSTER_NAME" --zone "$ZONE" --project "$PROJECT_ID"
 
 # arg handling
 KEEP=${KEEP_TAGS:-10}
@@ -18,12 +18,12 @@ RETENTION=${RETENTION_DAYS:-365}
 STAMP=$(date --date="$RETENTION days ago" +%s%3N)
 echo "stamp=$STAMP"
 
-## auth
-ACCESS_TOKEN=$(gcloud auth print-access-token)
+
+export ACCESS_TOKEN=$(gcloud auth print-access-token)
 
 ## use docker v2 api directly
-DOCKER_REGISTRY_PROTO='https://'
-DOCKER_REGISTRY_HOST=${DOCKER_REGISTRY_HOST:-us.gcr.io}
+export DOCKER_REGISTRY_PROTO='https://'
+
 
 ## fetch all images from the registry
 ### I'm ignoring pagination as there are not so many images in _catalog
@@ -33,6 +33,7 @@ curl --silent --show-error -u_token:"$ACCESS_TOKEN" -X GET "${DOCKER_REGISTRY_PR
   # make sure we only work with our GCR
   grep "^${PROJECT_ID}" > images.txt
 
+
 ## fetch in-use images:tags from cluster
 ### make sure to list all pods and replicasets (even the old ones that are scaled to zero, because we may want to rollback to them)
 kubectl get rs,po --all-namespaces -o jsonpath={..image} |
@@ -41,7 +42,7 @@ kubectl get rs,po --all-namespaces -o jsonpath={..image} |
   # make sure we work only with the ones that are in GCR and not other docker registries
   grep "${DOCKER_REGISTRY_HOST}/${PROJECT_ID}" |
   # sort them and get rid of the duplicities
-  sort -u >in-use.txt
+  sort -u > in-use.txt
 
 ### separate "image:tag" into "image tag"
 tr ':' ' ' > in-use-spaces.txt <in-use.txt
@@ -82,7 +83,7 @@ do
   #head tmp.json
 
   # filter out only the image we want and don't write "null" ( // empty) to the output file if the image is not used in the cluster
-  jq '.usedtags."'$DOCKER_REGISTRY_HOST/"$image"'"  // empty ' > used-tags-tmp.json <used-tags.json
+  jq '.usedtags."'$DOCKER_REGISTRY_HOST/"$image"'"  // empty ' > used-tags-tmp.json < used-tags.json
 
   #echo "DEBUG:"
   #head used-tags-tmp.json
